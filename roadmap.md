@@ -1,0 +1,11 @@
+# Tasks
+- [x] Display supplied weekly opening hours.
+- [x] Set Wake Up House name and Parkowa 10, 36-060 Głogów Małopolski address.
+- [x] Add the eight remaining uploaded dishes and burger category.
+- [x] Add an on-page cart with quantity controls, without inventing prices or checkout.
+- [x] Verify menu filters, photos, item details and cart in the preview.
+- [x] Add Dostawa i odbiór, O nas and Kontakt pages in the same visual style.
+- [x] Add an auto-tracked "Najczęściej wybierane" section on the home page.
+- [x] Add a short delivery strip and ordering-platform buttons on the home page.
+- [ ] Add zestawy (sets) — blocked: waiting for the user's zestawy list.
+- [ ] Fill placeholders in src/lib/site.ts (phone, delivery zones, platform and social links, NIP) — blocked: waiting for real data from the user.
