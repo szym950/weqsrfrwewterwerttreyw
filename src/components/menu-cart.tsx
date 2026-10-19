@@ -1,11 +1,6 @@
 import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { formatPrice, type Dish } from "@/lib/menu";
 
 export type CartItem = { dish: Dish; quantity: number };
@@ -21,10 +16,7 @@ export function MenuCart({
   items: CartItem[];
   onChange: (dish: Dish, delta: number) => void;
 }) {
-  const total = items.reduce(
-    (sum, item) => sum + (item.dish.pricePLN ?? 0) * item.quantity,
-    0,
-  );
+  const total = items.reduce((sum, item) => sum + (item.dish.pricePLN ?? 0) * item.quantity, 0);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
   return (

@@ -82,8 +82,8 @@
   --border: oklch(0.3 0.003 90);
   --input: var(--border);
   --ring: var(--primary);
-  --font-body: Arial, Helvetica, sans-serif;
-  --font-heading: 'Arial Narrow', Impact, sans-serif;
+  --font-body: 'Manrope', sans-serif;
+  --font-heading: 'Barlow Condensed', sans-serif;
   --overlay: oklch(0.1 0 0 / 88%);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
