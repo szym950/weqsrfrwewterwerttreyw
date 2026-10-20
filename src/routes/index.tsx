@@ -1,10 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowUpRight, Search, X, Plus, Check, ShoppingBag } from "lucide-react";
+import { ArrowUpRight, Search, X, Plus, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { categories, dishes, formatPrice, type Category, type Dish } from "@/lib/menu";
-import { MenuCart, type CartItem } from "@/components/menu-cart";
+import { useCart } from "@/lib/cart-state";
 import { SiteFooter } from "@/components/site-footer";
 import { site } from "@/lib/site";
 import { supabase } from "@/integrations/supabase/client";
@@ -40,15 +40,15 @@ async function readOrderCounts(): Promise<Record<string, number>> {
   return Object.fromEntries((data ?? []).map((row) => [row.dish_name, Number(row.count)]));
 }
 
-function recordOrder(dish: Dish) {
-  supabase
-    .rpc("increment_dish_count", { _dish: dish.name })
-    .then(({ error }) => {
-      if (error) console.error("Nie udało się zapisać wyboru dania.", error);
-    })
-    .catch((error) => {
+async function recordOrder(dish: Dish) {
+  try {
+    const { error } = await supabase.rpc("increment_dish_count", { _dish: dish.name });
+    if (error) {
       console.error("Nie udało się zapisać wyboru dania.", error);
-    });
+    }
+  } catch (error) {
+    console.error("Nie udało się zapisać wyboru dania.", error);
+  }
 }
 
 function Index() {
@@ -56,9 +56,7 @@ function Index() {
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [selected, setSelected] = useState<Dish | null>(null);
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [cartOpen, setCartOpen] = useState(false);
-  const cartCount = cart.reduce((total, item) => total + item.quantity, 0);
+  const { items: cart, change: updateCart, setOpen: setCartOpen } = useCart();
   const [topDishes, setTopDishes] = useState<Dish[]>([]);
   const refreshTopDishes = (delayMs = 0) => {
     window.setTimeout(async () => {
@@ -88,15 +86,7 @@ function Index() {
       recordOrder(dish);
       refreshTopDishes(400);
     }
-    setCart((current) => {
-      const exists = current.find((item) => item.dish.name === dish.name);
-      if (!exists) return delta > 0 ? [...current, { dish, quantity: delta }] : current;
-      return current
-        .map((item) =>
-          item.dish.name === dish.name ? { ...item, quantity: item.quantity + delta } : item,
-        )
-        .filter((item) => item.quantity > 0);
-    });
+    updateCart(dish, delta);
   };
   const visible = dishes.filter(
     (dish) =>
@@ -112,41 +102,6 @@ function Index() {
   };
   return (
     <>
-      <header className="site-header">
-        <div className="menu-shell header-inner">
-          <a href="/" className="wordmark" aria-label="Wake Up House — strona główna">
-            WAKE UP<span>HOUSE</span>
-          </a>
-          <nav className="header-nav" aria-label="Nawigacja główna">
-            <button
-              type="button"
-              className="header-nav-link nav-current"
-              onClick={() => selectCategory("Wszystko")}
-            >
-              Menu
-            </button>
-            <Link to="/dostawa" className="header-nav-link street-nav">
-              Dostawa
-            </Link>
-            <Link to="/o-nas" className="header-nav-link street-nav">
-              O nas
-            </Link>
-            <Link to="/kontakt" className="header-nav-link street-nav">
-              Kontakt
-            </Link>
-          </nav>
-          <Button
-            variant="outline"
-            className="cart-button"
-            onClick={() => setCartOpen(true)}
-            aria-label={`Otwórz koszyk, ${cartCount} dań`}
-          >
-            <ShoppingBag />
-            <span>Koszyk</span>
-            <span className="cart-count">{cartCount}</span>
-          </Button>
-        </div>
-      </header>
       <main>
         <div className="menu-shell menu-intro">
           <div>
@@ -363,7 +318,6 @@ function Index() {
         </section>
       </main>
       <SiteFooter />
-      <MenuCart open={cartOpen} onOpenChange={setCartOpen} items={cart} onChange={changeCart} />
       <Dialog
         open={selected !== null}
         onOpenChange={(open) => {

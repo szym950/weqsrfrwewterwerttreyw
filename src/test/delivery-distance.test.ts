@@ -13,7 +13,7 @@ describe("estimateDeliveryCost", () => {
 
     const estimate = await estimateDeliveryCost({ latitude: 50.2, longitude: 22 }, fetcher);
 
-    expect(estimate).toEqual({ distanceKm: 5.43, costPLN: 1.09 });
+    expect(estimate).toEqual({ distanceKm: 5.43, costPLN: 8.15 });
     expect(String(fetcher.mock.calls[0]?.[0])).toContain("route/v1/driving/");
     expect(String(fetcher.mock.calls[0]?.[0])).toContain("overview=false");
   });

@@ -38,18 +38,19 @@ export const site = {
     { name: "Reklamacje i zwroty", url: returnsPolicyUrl },
   ],
   deliveryShort:
-    "Dowozimy na terenie Głogowa Małopolskiego, Bud Głogowskich, Wysokiej Głogowskiej i Rudnej Małej. Dostawa orientacyjnie 0,20 zł za kilometr trasy drogowej. Minimalna wartość zamówienia: 50 zł.",
+    "Dowozimy na terenie Głogowa Małopolskiego, Bud Głogowskich, Wysokiej Głogowskiej i Rudnej Małej. Dostawa: 1,50 zł za kilometr trasy drogowej. Minimalna wartość zamówienia: 50 zł.",
   delivery: {
     area: "Głogów Małopolski, Budy Głogowskie, Wysoka Głogowska i Rudna Mała.",
     zones:
-      "Orientacyjnie 0,20 zł za każdy kilometr trasy samochodowej od lokalu (nie odległości w linii prostej). Stawka i opłata za opakowanie 0,25 zł wymagają potwierdzenia.",
-    ratePerKmPLN: 0.2,
+      "1,50 zł za każdy kilometr trasy samochodowej od lokalu (nie odległości w linii prostej).",
+    ratePerKmPLN: 1.5,
     originCoordinates: { latitude: 50.1531905, longitude: 21.9547502 },
     minOrder: "50 zł.",
     hours: "Do uzupełnienia — godziny, w których dowozimy.",
     pickup: "Odbiór na miejscu: Parkowa 10, 36-060 Głogów Małopolski. Szczegóły do uzupełnienia.",
     time: "Do uzupełnienia — orientacyjny czas realizacji zamówienia.",
-    payments: "Do uzupełnienia — dostępne formy płatności.",
+    payments:
+      "Dostawa: gotówka przy odbiorze lub PayU online (integracja w przygotowaniu). Odbiór osobisty: gotówka, BLIK lub karta na miejscu.",
   },
   about: [
     "Wake Up House to lokal przy Parkowej 10 w Głogowie Małopolski, gdzie zamawiasz burgery z wołowiny i chrupiącego fileta, pizzę na cieście z mozzarellą fior di latte, loaded fries i stripsy — wszystko przygotowywane na miejscu.",
