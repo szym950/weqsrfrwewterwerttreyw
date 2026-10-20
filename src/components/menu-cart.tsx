@@ -78,7 +78,11 @@ export function MenuCart({
         setAddressSuggestions(suggestions);
         setActiveSuggestionIndex(0);
         setAddressSearchStatus(
-          suggestions.length ? "Wybierz dokładny adres z podpowiedzi." : "Nie znaleziono adresów.",
+          suggestions.length === 0
+            ? "Nie znaleziono adresów."
+            : suggestions.some((suggestion) => suggestion.isDeliverable)
+              ? "Wybierz dokładny adres. Dostarczamy tylko do Głogowa Małopolskiego, Bud Głogowskich, Wysokiej Głogowskiej i Rudnej Małej."
+              : "Nie dostarczamy pod znalezione adresy. Obsługujemy Głogów Małopolski, Budy Głogowskie, Wysoką Głogowską i Rudną Małą.",
         );
       } catch (error) {
         console.error("Nie udało się pobrać podpowiedzi adresu.", error);
@@ -93,6 +97,17 @@ export function MenuCart({
   }, [addressSearchConsent, deliveryAddress, fulfillment, open, selectedAddress, stage]);
 
   const chooseAddressSuggestion = (suggestion: DeliveryAddressSuggestion) => {
+    if (!suggestion.isDeliverable) {
+      setAddressSuggestions([]);
+      setSelectedAddress(null);
+      setDeliveryEstimate(null);
+      setDeliveryError(
+        "Nie dostarczamy pod wskazany adres. Obsługujemy Głogów Małopolski, Budy Głogowskie, Wysoką Głogowską i Rudną Małą.",
+      );
+      setAddressSearchStatus("Ten adres jest poza obszarem dostawy.");
+      return;
+    }
+
     setDeliveryAddress(suggestion.label);
     setAddressSuggestions([]);
     setDeliveryEstimate(null);
@@ -121,6 +136,12 @@ export function MenuCart({
       }
       if (!selectedAddress || selectedAddress.kind !== "address") {
         setDeliveryError("Wybierz dokładny adres z podpowiedzi.");
+        return;
+      }
+      if (!selectedAddress.isDeliverable) {
+        setDeliveryError(
+          "Nie dostarczamy pod wskazany adres. Obsługujemy Głogów Małopolski, Budy Głogowskie, Wysoką Głogowską i Rudną Małą.",
+        );
         return;
       }
       setCalculatingDelivery(true);
@@ -362,11 +383,15 @@ export function MenuCart({
                           >
                             <button
                               type="button"
-                              className="address-suggestion"
+                              className={`address-suggestion${suggestion.isDeliverable ? "" : " address-suggestion-unavailable"}`}
                               onClick={() => chooseAddressSuggestion(suggestion)}
                             >
                               <strong>{suggestion.label}</strong>
-                              <span>{suggestion.detail}</span>
+                              <span>
+                                {suggestion.isDeliverable
+                                  ? suggestion.detail
+                                  : "Poza obszarem dostawy"}
+                              </span>
                             </button>
                           </li>
                         ))}

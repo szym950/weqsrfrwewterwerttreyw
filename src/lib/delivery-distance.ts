@@ -14,7 +14,31 @@ export type DeliveryAddressSuggestion = {
   kind: "place" | "street" | "address";
   latitude: number;
   longitude: number;
+  isDeliverable: boolean;
 };
+
+const deliveryAreaPlaces = new Set([
+  "glogow malopolski",
+  "budy glogowskie",
+  "wysoka glogowska",
+  "rudna mala",
+]);
+
+function normalizePlace(value: string) {
+  return value
+    .replace(/[łŁ]/g, "l")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pl-PL")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function isDeliveryArea(properties: PhotonFeature["properties"]) {
+  return [properties.locality, properties.city, properties.name]
+    .filter((place): place is string => Boolean(place))
+    .some((place) => deliveryAreaPlaces.has(normalizePlace(place)));
+}
 
 type PhotonFeature = {
   properties: {
@@ -91,14 +115,22 @@ export async function searchDeliveryAddresses(
           ? "Ulica · wybierz ponownie po wpisaniu numeru domu"
           : [properties.postcode, place].filter(Boolean).join(" · ");
 
-    return [{ label, detail, kind, latitude, longitude }];
+    return [
+      { label, detail, kind, latitude, longitude, isDeliverable: isDeliveryArea(properties) },
+    ];
   });
 }
 
 export async function estimateDeliveryCost(
-  destination: Pick<DeliveryAddressSuggestion, "latitude" | "longitude">,
+  destination: Pick<DeliveryAddressSuggestion, "latitude" | "longitude" | "isDeliverable">,
   fetcher: typeof fetch = fetch,
 ): Promise<DeliveryEstimate> {
+  if (!destination.isDeliverable) {
+    throw new Error(
+      "Nie dostarczamy pod wskazany adres. Obsługujemy Głogów Małopolski, Budy Głogowskie, Wysoką Głogowską i Rudną Małą.",
+    );
+  }
+
   const { latitude, longitude } = site.delivery.originCoordinates;
   const routingUrl = new URL(
     `${routingEndpoint}/${longitude},${latitude};${destination.longitude},${destination.latitude}`,
