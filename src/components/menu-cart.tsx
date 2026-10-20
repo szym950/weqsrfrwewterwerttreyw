@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -7,7 +7,6 @@ import type { DeliveryAddressSuggestion, DeliveryEstimate } from "@/lib/delivery
 import { formatPrice, type Dish } from "@/lib/menu";
 import { deliveryPrepaymentThresholdPLN, requiresDeliveryPrepayment } from "@/lib/order-policy";
 import type { CartItem } from "@/lib/cart-state";
-import { supabase } from "@/integrations/supabase/client";
 import { site } from "@/lib/site";
 
 type Fulfillment = "delivery" | "pickup";
@@ -15,7 +14,7 @@ type PaymentMethod = "cash_delivery" | "payu";
 
 const paymentLabels: Record<PaymentMethod, string> = {
   cash_delivery: "Gotówka przy dostawie",
-  payu: "PayU online",
+  payu: "PayU online — integracja w przygotowaniu",
 };
 
 export function MenuCart({
@@ -29,11 +28,10 @@ export function MenuCart({
   items: CartItem[];
   onChange: (dish: Dish, delta: number) => void;
 }) {
-  const [stage, setStage] = useState<"cart" | "details" | "review" | "success">("cart");
+  const [stage, setStage] = useState<"cart" | "details" | "review">("cart");
   const [fulfillment, setFulfillment] = useState<Fulfillment>("delivery");
   const [payment, setPayment] = useState<PaymentMethod>("cash_delivery");
   const [customerName, setCustomerName] = useState("");
-  const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [selectedAddress, setSelectedAddress] = useState<DeliveryAddressSuggestion | null>(null);
@@ -44,14 +42,6 @@ export function MenuCart({
   const [deliveryEstimate, setDeliveryEstimate] = useState<DeliveryEstimate | null>(null);
   const [deliveryError, setDeliveryError] = useState("");
   const [calculatingDelivery, setCalculatingDelivery] = useState(false);
-  const [submittingOrder, setSubmittingOrder] = useState(false);
-  const [orderError, setOrderError] = useState("");
-  const [orderNumber, setOrderNumber] = useState<number | null>(null);
-  const [orderTotal, setOrderTotal] = useState<number | null>(null);
-  const [confirmedPaymentMethod, setConfirmedPaymentMethod] = useState<
-    PaymentMethod | "onsite" | null
-  >(null);
-  const submissionKey = useRef<{ fingerprint: string; key: string } | null>(null);
 
   const subtotal = items.reduce((sum, item) => sum + (item.dish.pricePLN ?? 0) * item.quantity, 0);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
@@ -178,145 +168,25 @@ export function MenuCart({
     setDeliveryError("");
   };
 
-  const submitOrder = async () => {
-    setOrderError("");
-    if (requiresPrepayment && selectedPayment !== "payu") {
-      setOrderError("Zamówienie powyżej 150 zł wymaga płatności PayU.");
-      return;
-    }
-
-    const order = {
-      customerName,
-      customerEmail,
-      customerPhone,
-      fulfillment,
-      paymentMethod: selectedPayment,
-      deliveryAddress: fulfillment === "delivery" ? (selectedAddress?.label ?? null) : null,
-      destination:
-        fulfillment === "delivery" && selectedAddress
-          ? { latitude: selectedAddress.latitude, longitude: selectedAddress.longitude }
-          : null,
-      items: items.map(({ dish, quantity }) => ({
-        dishName: dish.name,
-        quantity,
-      })),
-    };
-    const fingerprint = JSON.stringify(order);
-    const key =
-      submissionKey.current?.fingerprint === fingerprint
-        ? submissionKey.current.key
-        : window.crypto.randomUUID();
-    submissionKey.current = { fingerprint, key };
-
-    setSubmittingOrder(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("create-order", {
-        body: { ...order, idempotencyKey: key },
-      });
-      if (error) {
-        let serverMessage = "";
-        if ("context" in error && error.context instanceof Response) {
-          try {
-            const responseBody: unknown = await error.context.json();
-            if (
-              typeof responseBody === "object" &&
-              responseBody !== null &&
-              "error" in responseBody &&
-              typeof responseBody.error === "string"
-            ) {
-              serverMessage = responseBody.error;
-            }
-          } catch (responseError) {
-            console.error("Nie udało się odczytać komunikatu serwera zamówień.", responseError);
-          }
-        }
-        if (serverMessage) throw new Error(serverMessage);
-        throw error;
-      }
-      if (
-        !data ||
-        typeof data.orderNumber !== "number" ||
-        typeof data.total !== "number" ||
-        !Number.isFinite(data.total)
-      ) {
-        throw new Error("Serwer nie zwrócił potwierdzenia zamówienia.");
-      }
-
-      if (typeof data.redirectUrl === "string") {
-        items.forEach(({ dish, quantity }) => onChange(dish, -quantity));
-        window.location.assign(data.redirectUrl);
-        return;
-      }
-
-      items.forEach(({ dish, quantity }) => onChange(dish, -quantity));
-      setOrderNumber(data.orderNumber);
-      setOrderTotal(data.total);
-      setConfirmedPaymentMethod(selectedPayment);
-      setStage("success");
-      submissionKey.current = null;
-    } catch (error) {
-      console.error("Nie udało się złożyć zamówienia.", error);
-      setOrderError(
-        error instanceof Error
-          ? error.message
-          : "Nie udało się wysłać zamówienia. Sprawdź połączenie i spróbuj ponownie.",
-      );
-    } finally {
-      setSubmittingOrder(false);
-    }
-  };
-
-  const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen && stage === "success") {
-      setStage("cart");
-      setOrderNumber(null);
-      setOrderTotal(null);
-      setConfirmedPaymentMethod(null);
-      setOrderError("");
-    }
-    onOpenChange(nextOpen);
-  };
-
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="cart-dialog">
         <DialogTitle className="cart-title">
-          {stage === "success"
-            ? "Zamówienie przyjęte"
-            : stage === "review"
-              ? "Podsumowanie"
-              : stage === "details"
-                ? "Dane zamówienia"
-                : "Twój koszyk"}
+          {stage === "review"
+            ? "Podsumowanie"
+            : stage === "details"
+              ? "Dane zamówienia"
+              : "Twój koszyk"}
           <span className="text-primary">.</span>
         </DialogTitle>
         <DialogDescription>
-          {stage === "success"
-            ? "Przekazaliśmy je do lokalu."
-            : stage === "review"
-              ? "Sprawdź produkty, dostawę, płatność i sposób realizacji."
-              : items.length
-                ? "Wybrane dania"
-                : "Twój koszyk jest pusty."}
+          {stage === "review"
+            ? "Sprawdź produkty, dostawę, płatność i sposób realizacji."
+            : items.length
+              ? "Wybrane dania"
+              : "Twój koszyk jest pusty."}
         </DialogDescription>
-        {stage === "success" ? (
-          <div className="checkout-summary">
-            <h3>Numer zamówienia: #{orderNumber}</h3>
-            {orderTotal !== null && (
-              <p className="cart-checkout-note">Kwota do zapłaty: {formatPrice(orderTotal)}</p>
-            )}
-            <p className="cart-checkout-note">
-              {confirmedPaymentMethod === "payu"
-                ? "PayU potwierdziło płatność. Lokal otrzymał zamówienie."
-                : confirmedPaymentMethod === "onsite"
-                  ? "Lokal otrzymał zamówienie. Zapłacisz na miejscu przy odbiorze."
-                  : "Lokal otrzymał zamówienie. Zapłacisz gotówką przy dostawie."}
-            </p>
-            <div className="cart-actions">
-              <Button onClick={() => handleOpenChange(false)}>Wróć do menu</Button>
-            </div>
-          </div>
-        ) : items.length === 0 ? (
+        {items.length === 0 ? (
           <div className="cart-empty">
             <ShoppingBag />
             <Button onClick={() => onOpenChange(false)}>Wróć do menu</Button>
@@ -433,20 +303,6 @@ export function MenuCart({
               />
             </label>
             {fulfillment === "delivery" && (
-              <label className="checkout-field">
-                E-mail
-                <input
-                  required={requiresPrepayment || payment === "payu"}
-                  type="email"
-                  autoComplete="email"
-                  maxLength={254}
-                  value={customerEmail}
-                  onChange={(event) => setCustomerEmail(event.target.value)}
-                />
-                <small>E-mail jest potrzebny do płatności PayU.</small>
-              </label>
-            )}
-            {fulfillment === "delivery" && (
               <>
                 <p className="cart-checkout-note">
                   Opłata za dostawę wynosi 1,50 zł za każdy kilometr trasy samochodowej z lokalu.
@@ -559,7 +415,8 @@ export function MenuCart({
                     </strong>
                     <p>
                       Przy dostawie wymagana jest przedpłata. Gotówka przy dostawie jest
-                      niedostępna. Wybierz PayU i opłać zamówienie, aby trafiło do lokalu.
+                      niedostępna. PayU nie jest jeszcze uruchomione, więc tego zamówienia nie można
+                      obecnie opłacić ani złożyć online.
                     </p>
                   </div>
                 )}
@@ -572,12 +429,14 @@ export function MenuCart({
                         name="payment"
                         value={method}
                         checked={requiresPrepayment ? method === "payu" : payment === method}
-                        disabled={method === "cash_delivery" && requiresPrepayment}
+                        disabled={
+                          method === "payu" || (method === "cash_delivery" && requiresPrepayment)
+                        }
                         onChange={() => setPayment(method)}
                       />
                       <span>{paymentLabels[method]}</span>
                       {method === "payu" && (
-                        <small>Przekierowanie do bezpiecznej strony PayU</small>
+                        <small>Testy niedostępne — brak konta i integracji</small>
                       )}
                       {method === "cash_delivery" && requiresPrepayment && (
                         <small>
@@ -616,9 +475,8 @@ export function MenuCart({
               </p>
             )}
             <p className="checkout-preview-warning">
-              {selectedPayment === "payu"
-                ? "Po kliknięciu przejdziesz do PayU. Zamówienie trafi do lokalu dopiero po otrzymaniu potwierdzenia płatności."
-                : "Po złożeniu zamówienie trafi do lokalu. Dostawa jest opłacana gotówką przy odbiorze, a przy odbiorze osobistym płatność wybierzesz na miejscu."}
+              To przygotowanie i podgląd zamówienia. Nie ma jeszcze aktywnego PayU ani systemu
+              przyjmującego zamówienia — nic nie zostanie wysłane ani pobrane.
             </p>
             <div className="cart-actions">
               <Button type="button" variant="outline" onClick={() => setStage("cart")}>
@@ -691,8 +549,9 @@ export function MenuCart({
             {requiresPrepayment && (
               <p className="payu-readiness" role="alert">
                 Wymagana przedpłata: wartość produktów przy dostawie przekracza{" "}
-                {formatPrice(deliveryPrepaymentThresholdPLN)}. Płatność gotówką jest zablokowana;
-                zamówienie zostanie przekazane do lokalu po potwierdzeniu płatności PayU.
+                {formatPrice(deliveryPrepaymentThresholdPLN)}. Płatność gotówką jest zablokowana.
+                PayU nie działa jeszcze, więc to podsumowanie nie może zostać wysłane jako
+                zamówienie.
               </p>
             )}
             <section className="checkout-legal" aria-labelledby="checkout-review-legal-title">
@@ -711,29 +570,15 @@ export function MenuCart({
               </nav>
             </section>
             <p className="checkout-preview-warning">
-              Zamówienie zostanie przekazane do lokalu. Płatność PayU nie jest jeszcze dostępna;
-              przy dostawie można zapłacić gotówką, a przy odbiorze płatność wybierzesz na miejscu.
+              To wyłącznie podsumowanie testowe. Zamówienie nie jest wysłane, PayU nie pobierze
+              płatności, a lokal nie otrzyma tych danych. Finalny przycisk „Zamówienie z obowiązkiem
+              zapłaty” pojawi się po uruchomieniu prawdziwej obsługi zamówień i płatności.
             </p>
-            {orderError && (
-              <p className="checkout-route-error" role="alert">
-                {orderError}
-              </p>
-            )}
             <div className="cart-actions">
               <Button variant="outline" onClick={() => setStage("details")}>
                 Wróć i popraw dane
               </Button>
-              {requiresPrepayment ? (
-                <Button disabled>PayU niedostępne</Button>
-              ) : (
-                <Button onClick={() => void submitOrder()} disabled={submittingOrder}>
-                  {submittingOrder
-                    ? "Wysyłanie…"
-                    : selectedPayment === "payu"
-                      ? "Zamawiam z obowiązkiem zapłaty — PayU"
-                      : "Zamawiam z obowiązkiem zapłaty"}
-                </Button>
-              )}
+              <Button onClick={() => onOpenChange(false)}>Wróć do menu</Button>
             </div>
           </div>
         )}

@@ -21,6 +21,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "b3c4956e-6b67-422f-b412-6e308fc461e9"
+      }
+    },
+    "owner": "kakaroko"
   }
 }

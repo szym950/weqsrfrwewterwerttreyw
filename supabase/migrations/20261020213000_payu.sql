@@ -5,8 +5,7 @@ alter table public.orders
 
 alter table public.orders
   add column customer_email text,
-  add column payment_status text not null default 'not_required'
-    check (payment_status in ('not_required', 'pending', 'paid', 'failed')),
+  add column payment_status text not null default 'not_required',
   add column payu_order_id text,
   add column payu_redirect_url text,
   add constraint orders_payment_method_check
