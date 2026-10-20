@@ -5,17 +5,16 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { estimateDeliveryCost, searchDeliveryAddresses } from "@/lib/delivery-distance";
 import type { DeliveryAddressSuggestion, DeliveryEstimate } from "@/lib/delivery-distance";
 import { formatPrice, type Dish } from "@/lib/menu";
+import { deliveryPrepaymentThresholdPLN, requiresDeliveryPrepayment } from "@/lib/order-policy";
 import type { CartItem } from "@/lib/cart-state";
+import { site } from "@/lib/site";
 
 type Fulfillment = "delivery" | "pickup";
-type PaymentMethod = "cash_delivery" | "payu" | "cash_pickup" | "blik_pickup" | "card_pickup";
+type PaymentMethod = "cash_delivery" | "payu";
 
 const paymentLabels: Record<PaymentMethod, string> = {
   cash_delivery: "Gotówka przy dostawie",
   payu: "PayU online — integracja w przygotowaniu",
-  cash_pickup: "Gotówka przy odbiorze",
-  blik_pickup: "BLIK na miejscu",
-  card_pickup: "Karta na miejscu",
 };
 
 export function MenuCart({
@@ -48,6 +47,9 @@ export function MenuCart({
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
   const deliveryCost = fulfillment === "delivery" ? (deliveryEstimate?.costPLN ?? 0) : 0;
   const total = subtotal + deliveryCost;
+  const requiresPrepayment = fulfillment === "delivery" && requiresDeliveryPrepayment(subtotal);
+  const selectedPayment: PaymentMethod | "onsite" =
+    fulfillment === "pickup" ? "onsite" : requiresPrepayment ? "payu" : payment;
 
   useEffect(() => {
     const query = deliveryAddress.trim();
@@ -140,7 +142,7 @@ export function MenuCart({
 
   const updateFulfillment = (next: Fulfillment) => {
     setFulfillment(next);
-    setPayment(next === "delivery" ? "cash_delivery" : "cash_pickup");
+    setPayment("cash_delivery");
     setDeliveryEstimate(null);
     setDeliveryError("");
   };
@@ -379,26 +381,69 @@ export function MenuCart({
                 </div>
               </>
             )}
-            <fieldset className="payment-options">
-              <legend>Sposób płatności</legend>
-              {(fulfillment === "delivery"
-                ? (["cash_delivery", "payu"] as const)
-                : (["cash_pickup", "blik_pickup", "card_pickup"] as const)
-              ).map((method) => (
-                <label className="payment-option" key={method}>
-                  <input
-                    type="radio"
-                    name="payment"
-                    value={method}
-                    checked={payment === method}
-                    disabled={method === "payu"}
-                    onChange={() => setPayment(method)}
-                  />
-                  <span>{paymentLabels[method]}</span>
-                  {method === "payu" && <small>Testy niedostępne — brak konta i integracji</small>}
-                </label>
-              ))}
-            </fieldset>
+            {fulfillment === "delivery" ? (
+              <div className="checkout-payment-section">
+                {requiresPrepayment && (
+                  <div className="payu-readiness" role="alert">
+                    <strong>
+                      Wartość produktów przekracza {formatPrice(deliveryPrepaymentThresholdPLN)}.
+                    </strong>
+                    <p>
+                      Przy dostawie wymagana jest przedpłata. Gotówka przy dostawie jest
+                      niedostępna. PayU nie jest jeszcze uruchomione, więc tego zamówienia nie można
+                      obecnie opłacić ani złożyć online.
+                    </p>
+                  </div>
+                )}
+                <fieldset className="payment-options">
+                  <legend>Sposób płatności</legend>
+                  {(["cash_delivery", "payu"] as const).map((method) => (
+                    <label className="payment-option" key={method}>
+                      <input
+                        type="radio"
+                        name="payment"
+                        value={method}
+                        checked={requiresPrepayment ? method === "payu" : payment === method}
+                        disabled={
+                          method === "payu" || (method === "cash_delivery" && requiresPrepayment)
+                        }
+                        onChange={() => setPayment(method)}
+                      />
+                      <span>{paymentLabels[method]}</span>
+                      {method === "payu" && (
+                        <small>Testy niedostępne — brak konta i integracji</small>
+                      )}
+                      {method === "cash_delivery" && requiresPrepayment && (
+                        <small>
+                          Niedostępna przy wartości produktów powyżej{" "}
+                          {formatPrice(deliveryPrepaymentThresholdPLN)}.
+                        </small>
+                      )}
+                    </label>
+                  ))}
+                </fieldset>
+              </div>
+            ) : (
+              <p className="cart-checkout-note">
+                Przy odbiorze osobistym wybierzesz sposób płatności na miejscu.
+              </p>
+            )}
+            <section className="checkout-legal" aria-labelledby="checkout-legal-title">
+              <h3 id="checkout-legal-title">Regulaminy i dokumenty przed zamówieniem</h3>
+              <p>Przed złożeniem zamówienia zapoznaj się z dokumentami:</p>
+              <nav aria-label="Dokumenty zamówienia">
+                {site.legalDocuments.map((document) => (
+                  <a
+                    key={document.name}
+                    href={document.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {document.name}
+                  </a>
+                ))}
+              </nav>
+            </section>
             {deliveryError && (
               <p className="checkout-route-error" role="alert">
                 {deliveryError}
@@ -457,7 +502,11 @@ export function MenuCart({
               </div>
               <div>
                 <dt>Płatność</dt>
-                <dd>{paymentLabels[payment]}</dd>
+                <dd>
+                  {selectedPayment === "onsite"
+                    ? "Wybierzesz na miejscu przy odbiorze"
+                    : paymentLabels[selectedPayment]}
+                </dd>
               </div>
               <div className="checkout-total">
                 <dt>Łącznie</dt>
@@ -472,6 +521,29 @@ export function MenuCart({
                 <dd>{customerPhone}</dd>
               </div>
             </dl>
+            {requiresPrepayment && (
+              <p className="payu-readiness" role="alert">
+                Wymagana przedpłata: wartość produktów przy dostawie przekracza{" "}
+                {formatPrice(deliveryPrepaymentThresholdPLN)}. Płatność gotówką jest zablokowana.
+                PayU nie działa jeszcze, więc to podsumowanie nie może zostać wysłane jako
+                zamówienie.
+              </p>
+            )}
+            <section className="checkout-legal" aria-labelledby="checkout-review-legal-title">
+              <h3 id="checkout-review-legal-title">Regulaminy i dokumenty</h3>
+              <nav aria-label="Dokumenty zamówienia">
+                {site.legalDocuments.map((document) => (
+                  <a
+                    key={document.name}
+                    href={document.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {document.name}
+                  </a>
+                ))}
+              </nav>
+            </section>
             <p className="checkout-preview-warning">
               To wyłącznie podsumowanie testowe. Zamówienie nie jest wysłane, PayU nie pobierze
               płatności, a lokal nie otrzyma tych danych. Finalny przycisk „Zamówienie z obowiązkiem

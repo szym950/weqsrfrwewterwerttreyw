@@ -37,3 +37,7 @@ Podsumowanie testowe pokazuje produkty, opłatę za trasę samochodową (1,50 z�
 wybrany sposób płatności i realizacji. PayU oraz wysyłanie zamówień do lokalu
 wymagają jeszcze konta sprzedawcy i backendu; do tego czasu strona nie wysyła
 zamówień, nie pobiera płatności ani nie pokazuje przycisku finalizacji zakupu.
+Przy odbiorze osobistym metodę płatności wybiera się na miejscu. Przy dostawie
+gotówka jest dostępna do wartości produktów 150 zł; powyżej 150 zł wymagana
+jest przedpłata, dlatego gotówka jest zablokowana. PayU nie jest jeszcze
+uruchomione, więc takie zamówienia można jedynie sprawdzić w podglądzie.

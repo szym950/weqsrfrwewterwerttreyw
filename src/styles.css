@@ -641,6 +641,36 @@ input {
   cursor: not-allowed;
   opacity: 0.65;
 }
+.checkout-payment-section {
+  display: grid;
+  gap: 12px;
+}
+.checkout-legal {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+.checkout-legal h3 {
+  font-size: 13px;
+  font-weight: 700;
+}
+.checkout-legal p {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.checkout-legal nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.checkout-legal a {
+  color: var(--primary);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .checkout-field {
   display: grid;
   gap: 7px;
@@ -1136,6 +1166,29 @@ input {
   display: grid;
   gap: 14px;
   justify-items: start;
+}
+.delivery-legal {
+  margin-top: 42px;
+  border-top: 1px solid var(--border);
+  padding-top: 24px;
+}
+.delivery-legal h2 {
+  margin-bottom: 16px;
+  font-family: var(--font-heading);
+  font-size: 24px;
+  font-weight: 700;
+}
+.delivery-legal .legal-links {
+  margin-bottom: 0;
+}
+.delivery-legal .legal-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.delivery-legal .legal-links svg {
+  width: 14px;
+  height: 14px;
 }
 .inline-link {
   color: var(--primary);

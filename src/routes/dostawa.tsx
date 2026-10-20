@@ -46,6 +46,16 @@ function Dostawa() {
           </div>
         ))}
       </div>
+      <section className="delivery-legal" aria-labelledby="delivery-legal-title">
+        <h2 id="delivery-legal-title">Regulaminy i dokumenty</h2>
+        <nav className="footer-links legal-links" aria-label="Regulaminy i dokumenty">
+          {site.legalDocuments.map((document) => (
+            <a key={document.name} href={document.url} target="_blank" rel="noopener noreferrer">
+              {document.name} <ArrowUpRight aria-hidden="true" />
+            </a>
+          ))}
+        </nav>
+      </section>
       <div className="order-cta">
         <p className="info-label">Zamów</p>
         <div className="platform-buttons">
