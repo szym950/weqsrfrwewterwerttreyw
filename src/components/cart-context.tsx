@@ -6,9 +6,9 @@ const cartStorageKey = "wakeuphouse-cart";
 
 function readCart(): CartItem[] {
   try {
-    return typeof window === "undefined"
-      ? []
-      : parseCart(window.localStorage.getItem(cartStorageKey));
+    if (typeof window === "undefined") return [];
+    if (new URLSearchParams(window.location.search).get("payment") === "return") return [];
+    return parseCart(window.localStorage.getItem(cartStorageKey));
   } catch (error) {
     console.error("Nie udało się odczytać zapisanego koszyka.", error);
     return [];

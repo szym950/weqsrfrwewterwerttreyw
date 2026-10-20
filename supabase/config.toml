@@ -1,1 +1,7 @@
 project_id = "rsfzhzzswrhtossxigsl"
+
+[functions.create-order]
+verify_jwt = false
+
+[functions.payu-notify]
+verify_jwt = false

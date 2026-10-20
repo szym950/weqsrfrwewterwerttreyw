@@ -33,11 +33,49 @@ hosting nie wymaga dodatkowych reguł przekierowań. Zdjęcia dań znajdują si�
 `public/`, a dane menu w `src/lib/menu.ts`. Koszyk zapisuje produkty w
 przeglądarce i zachowuje je podczas przechodzenia między podstronami.
 
-Podsumowanie testowe pokazuje produkty, opłatę za trasę samochodową (1,50 zł/km),
-wybrany sposób płatności i realizacji. PayU oraz wysyłanie zamówień do lokalu
-wymagają jeszcze konta sprzedawcy i backendu; do tego czasu strona nie wysyła
-zamówień, nie pobiera płatności ani nie pokazuje przycisku finalizacji zakupu.
-Przy odbiorze osobistym metodę płatności wybiera się na miejscu. Przy dostawie
-gotówka jest dostępna do wartości produktów 150 zł; powyżej 150 zł wymagana
-jest przedpłata, dlatego gotówka jest zablokowana. PayU nie jest jeszcze
-uruchomione, więc takie zamówienia można jedynie sprawdzić w podglądzie.
+Strona przekazuje zamówienia do Supabase Edge Function `create-order`. Serwer
+ponownie sprawdza katalog i ceny, inicjuje płatność PayU, a aplikacja Android
+odbiera zamówienia przez Supabase Realtime. Płatności PayU działają tylko po
+wdrożeniu backendu i ustawieniu sekretów. Zamówienia PayU trafiają do lokalu
+dopiero po poprawnej weryfikacji powiadomienia z PayU. Dostawa powyżej 150 zł
+wymaga PayU; do tego progu klient może zapłacić gotówką lub PayU. Przy odbiorze
+osobistym płatność jest na miejscu.
+
+## Uruchomienie przyjmowania zamówień
+
+1. Zaloguj się do Supabase CLI i połącz projekt (`supabase login`,
+   `supabase link`).
+2. Wypchnij migrację bazy i Edge Function:
+
+   ```sh
+   supabase db push
+   supabase functions deploy create-order
+   ```
+
+   Funkcja korzysta z `SUPABASE_URL` i `SUPABASE_SERVICE_ROLE_KEY` dostępnych
+   w środowisku Supabase. Nie umieszczaj klucza service role ani sekretów PayU
+   w kodzie strony lub aplikacji.
+
+3. Utwórz osobne konta pracowników w Supabase Authentication; nie włączaj
+   publicznej rejestracji.
+4. Dodaj UUID pracowników do `public.staff_members` w SQL Editorze. RLS nie
+   udostępnia zamówień samym zalogowanym użytkownikom.
+5. Skonfiguruj zmienne `EXPO_PUBLIC_SUPABASE_URL` i
+   `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` zgodnie z
+   [instrukcją aplikacji Android](./android-app/README.md). Następnie uruchom
+   panel z `android-app/` albo zbuduj APK przez Expo EAS.
+6. Wykonaj kroki konfiguracji sandbox z
+   [instrukcji PayU krok po kroku](./PAYU-TEST-INSTRUKCJA.md). Najpierw wdróż
+   funkcje PayU, dodaj sekrety w Supabase i dopiero potem publikuj nowy build
+   strony.
+
+Szczegółowa instrukcja panelu: [android-app/README.md](./android-app/README.md).
+Szczegółowa instrukcja testów PayU:
+[PAYU-TEST-INSTRUKCJA.md](./PAYU-TEST-INSTRUKCJA.md).
+Wycinek kopii projektu sprzed wdrożenia jest w
+`backup/project-before-orders.tar.gz`; archiwum celowo pomija pliki `.env`,
+zależności i buildy.
+
+Przy zmianie cen menu zaktualizuj również katalog serwerowy w
+`supabase/functions/_shared/menu.ts`; ceny z przeglądarki nie są traktowane
+jako wiarygodne. Test katalogu sprawdza zgodność obu list.

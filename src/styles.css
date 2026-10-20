@@ -728,6 +728,9 @@ input {
   color: var(--muted-foreground);
   font-size: 11px;
 }
+.address-suggestion-unavailable span {
+  color: var(--destructive);
+}
 .address-search-status {
   color: var(--muted-foreground);
   font-size: 11px;

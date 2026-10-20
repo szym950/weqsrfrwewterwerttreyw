@@ -56,6 +56,7 @@ function Index() {
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [selected, setSelected] = useState<Dish | null>(null);
+  const [payuReturn, setPayuReturn] = useState(false);
   const { items: cart, change: updateCart, setOpen: setCartOpen } = useCart();
   const [topDishes, setTopDishes] = useState<Dish[]>([]);
   const refreshTopDishes = (delayMs = 0) => {
@@ -80,6 +81,12 @@ function Index() {
   useEffect(() => {
     refreshTopDishes();
   }, []);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("payment") !== "return") return;
+    setPayuReturn(true);
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.hash}`);
+  }, []);
   const changeCart = (dish: Dish, delta: number) => {
     if (delta > 0 && dish.pricePLN === null) return;
     if (delta > 0) {
@@ -103,6 +110,12 @@ function Index() {
   return (
     <>
       <main>
+        {payuReturn && (
+          <p className="menu-shell checkout-preview-warning" role="status">
+            Wróciłeś z PayU. Czekamy na potwierdzenie transakcji — zamówienie trafi do lokalu po
+            potwierdzeniu płatności.
+          </p>
+        )}
         <div className="menu-shell menu-intro">
           <div>
             <p className="eyebrow">Wake Up House · Burgery, pizza & street food</p>
