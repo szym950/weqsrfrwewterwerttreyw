@@ -1,9 +1,10 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { estimateDeliveryCost, searchDeliveryAddresses } from "@/lib/delivery-distance";
 import type { DeliveryAddressSuggestion, DeliveryEstimate } from "@/lib/delivery-distance";
+import { supabase } from "@/integrations/supabase/client";
 import { formatPrice, type Dish } from "@/lib/menu";
 import { deliveryPrepaymentThresholdPLN, requiresDeliveryPrepayment } from "@/lib/order-policy";
 import type { CartItem } from "@/lib/cart-state";
@@ -11,11 +12,16 @@ import { site } from "@/lib/site";
 
 type Fulfillment = "delivery" | "pickup";
 type PaymentMethod = "cash_delivery" | "payu";
+type OrderConfirmation = { orderNumber: number; total: number };
 
 const paymentLabels: Record<PaymentMethod, string> = {
   cash_delivery: "Gotówka przy dostawie",
   payu: "PayU online — integracja w przygotowaniu",
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 export function MenuCart({
   open,
@@ -28,7 +34,7 @@ export function MenuCart({
   items: CartItem[];
   onChange: (dish: Dish, delta: number) => void;
 }) {
-  const [stage, setStage] = useState<"cart" | "details" | "review">("cart");
+  const [stage, setStage] = useState<"cart" | "details" | "review" | "complete">("cart");
   const [fulfillment, setFulfillment] = useState<Fulfillment>("delivery");
   const [payment, setPayment] = useState<PaymentMethod>("cash_delivery");
   const [customerName, setCustomerName] = useState("");
@@ -42,6 +48,10 @@ export function MenuCart({
   const [deliveryEstimate, setDeliveryEstimate] = useState<DeliveryEstimate | null>(null);
   const [deliveryError, setDeliveryError] = useState("");
   const [calculatingDelivery, setCalculatingDelivery] = useState(false);
+  const [submittingOrder, setSubmittingOrder] = useState(false);
+  const [orderError, setOrderError] = useState("");
+  const [orderConfirmation, setOrderConfirmation] = useState<OrderConfirmation | null>(null);
+  const idempotencyKey = useRef<string | null>(null);
 
   const subtotal = items.reduce((sum, item) => sum + (item.dish.pricePLN ?? 0) * item.quantity, 0);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
@@ -161,6 +171,88 @@ export function MenuCart({
     setStage("review");
   };
 
+  const submitOrder = async () => {
+    if (submittingOrder || (fulfillment === "delivery" && requiresPrepayment)) return;
+    setSubmittingOrder(true);
+    setOrderError("");
+
+    try {
+      idempotencyKey.current ??= crypto.randomUUID();
+      const { data, error } = await supabase.functions.invoke("create-order", {
+        body: {
+          idempotencyKey: idempotencyKey.current,
+          customerName,
+          customerPhone,
+          fulfillment,
+          paymentMethod: selectedPayment,
+          deliveryAddress: fulfillment === "delivery" ? selectedAddress?.label : null,
+          destination:
+            fulfillment === "delivery" && selectedAddress
+              ? {
+                  latitude: selectedAddress.latitude,
+                  longitude: selectedAddress.longitude,
+                }
+              : null,
+          items: items.map(({ dish, quantity }) => ({ dishName: dish.name, quantity })),
+        },
+      });
+
+      if (error) {
+        console.error("Nie udało się wysłać zamówienia.", error);
+        if (error.context instanceof Response) {
+          try {
+            const body: unknown = await error.context.clone().json();
+            if (isRecord(body) && typeof body["error"] === "string") {
+              setOrderError(body["error"]);
+              return;
+            }
+          } catch (parseError) {
+            console.error("Nie udało się odczytać błędu odpowiedzi zamówienia.", parseError);
+          }
+        }
+        setOrderError("Nie udało się wysłać zamówienia. Sprawdź połączenie i spróbuj ponownie.");
+        return;
+      }
+
+      if (
+        !isRecord(data) ||
+        typeof data["orderNumber"] !== "number" ||
+        typeof data["total"] !== "number" ||
+        !Number.isFinite(data["total"])
+      ) {
+        console.error("Serwer zwrócił nieprawidłowe potwierdzenie zamówienia.");
+        setOrderError("Nie udało się potwierdzić zamówienia. Skontaktuj się z lokalem.");
+        return;
+      }
+
+      setOrderConfirmation({ orderNumber: data["orderNumber"], total: data["total"] });
+      setStage("complete");
+      idempotencyKey.current = null;
+      for (const item of items) onChange(item.dish, -item.quantity);
+    } catch (error) {
+      console.error("Wystąpił błąd podczas wysyłania zamówienia.", error);
+      setOrderError("Nie udało się wysłać zamówienia. Sprawdź połączenie i spróbuj ponownie.");
+    } finally {
+      setSubmittingOrder(false);
+    }
+  };
+
+  const handleDialogOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      setStage("cart");
+      setOrderError("");
+      setOrderConfirmation(null);
+      idempotencyKey.current = null;
+    }
+    onOpenChange(nextOpen);
+  };
+
+  const returnToDetails = () => {
+    idempotencyKey.current = null;
+    setOrderError("");
+    setStage("details");
+  };
+
   const updateFulfillment = (next: Fulfillment) => {
     setFulfillment(next);
     setPayment("cash_delivery");
@@ -169,24 +261,46 @@ export function MenuCart({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent className="cart-dialog">
         <DialogTitle className="cart-title">
           {stage === "review"
             ? "Podsumowanie"
             : stage === "details"
               ? "Dane zamówienia"
+              : stage === "complete"
+                ? "Zamówienie wysłane"
               : "Twój koszyk"}
           <span className="text-primary">.</span>
         </DialogTitle>
         <DialogDescription>
           {stage === "review"
             ? "Sprawdź produkty, dostawę, płatność i sposób realizacji."
+            : stage === "complete"
+              ? "Szczegóły zamówienia zostały przekazane do lokalu."
             : items.length
               ? "Wybrane dania"
               : "Twój koszyk jest pusty."}
         </DialogDescription>
-        {items.length === 0 ? (
+        {stage === "complete" && orderConfirmation ? (
+          <div className="checkout-summary">
+            <p>
+              Zamówienie <strong>#{orderConfirmation.orderNumber}</strong> zostało wysłane do
+              lokalu.
+            </p>
+            <div className="checkout-total">
+              Łącznie: {formatPrice(orderConfirmation.total)}
+            </div>
+            <p className="cart-checkout-note">
+              {fulfillment === "pickup"
+                ? "Płatność przy odbiorze na miejscu."
+                : "Płatność gotówką przy dostawie."}
+            </p>
+            <div className="cart-actions">
+              <Button onClick={() => handleDialogOpenChange(false)}>Wróć do menu</Button>
+            </div>
+          </div>
+        ) : items.length === 0 ? (
           <div className="cart-empty">
             <ShoppingBag />
             <Button onClick={() => onOpenChange(false)}>Wróć do menu</Button>
@@ -570,15 +684,29 @@ export function MenuCart({
               </nav>
             </section>
             <p className="checkout-preview-warning">
-              To wyłącznie podsumowanie testowe. Zamówienie nie jest wysłane, PayU nie pobierze
-              płatności, a lokal nie otrzyma tych danych. Finalny przycisk „Zamówienie z obowiązkiem
-              zapłaty” pojawi się po uruchomieniu prawdziwej obsługi zamówień i płatności.
+              Po złożeniu zamówienia lokal otrzyma je w panelu.{" "}
+              {fulfillment === "pickup"
+                ? "Zapłacisz przy odbiorze na miejscu."
+                : "Zapłacisz gotówką przy dostawie."}
             </p>
+            {orderError && (
+              <p className="checkout-route-error" role="alert">
+                {orderError}
+              </p>
+            )}
             <div className="cart-actions">
-              <Button variant="outline" onClick={() => setStage("details")}>
+              <Button variant="outline" onClick={returnToDetails} disabled={submittingOrder}>
                 Wróć i popraw dane
               </Button>
-              <Button onClick={() => onOpenChange(false)}>Wróć do menu</Button>
+              <Button onClick={() => handleDialogOpenChange(false)} disabled={submittingOrder}>
+                Wróć do menu
+              </Button>
+              <Button
+                onClick={submitOrder}
+                disabled={submittingOrder || (fulfillment === "delivery" && requiresPrepayment)}
+              >
+                {submittingOrder ? "Wysyłam zamówienie…" : "Zamawiam z obowiązkiem zapłaty"}
+              </Button>
             </div>
           </div>
         )}

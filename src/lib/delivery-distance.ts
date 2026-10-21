@@ -122,10 +122,11 @@ export async function searchDeliveryAddresses(
 }
 
 export async function estimateDeliveryCost(
-  destination: Pick<DeliveryAddressSuggestion, "latitude" | "longitude" | "isDeliverable">,
+  destination: Pick<DeliveryAddressSuggestion, "latitude" | "longitude"> &
+    Partial<Pick<DeliveryAddressSuggestion, "isDeliverable">>,
   fetcher: typeof fetch = fetch,
 ): Promise<DeliveryEstimate> {
-  if (!destination.isDeliverable) {
+  if (destination.isDeliverable === false) {
     throw new Error(
       "Nie dostarczamy pod wskazany adres. Obsługujemy Głogów Małopolski, Budy Głogowskie, Wysoką Głogowską i Rudną Małą.",
     );
