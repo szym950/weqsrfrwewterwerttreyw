@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { Dish } from "@/lib/menu";
 import { CartContext, parseCart, type CartItem } from "@/lib/cart-state";
 
@@ -40,7 +40,20 @@ export function CartProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const syncMenu = useCallback((dishes: Dish[]) => {
+    setItems((current) =>
+      current.flatMap(({ dish, quantity }) => {
+        const currentDish = dishes.find((item) => item.name === dish.name);
+        return currentDish && currentDish.pricePLN !== null
+          ? [{ dish: currentDish, quantity }]
+          : [];
+      }),
+    );
+  }, []);
+
   return (
-    <CartContext.Provider value={{ items, change, open, setOpen }}>{children}</CartContext.Provider>
+    <CartContext.Provider value={{ items, change, syncMenu, open, setOpen }}>
+      {children}
+    </CartContext.Provider>
   );
 }

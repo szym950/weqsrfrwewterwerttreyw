@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 import { timingSafeEqual, createHash } from "node:crypto";
+import { notifyStaffOfNewOrder } from "../_shared/order-push.ts";
 
 function jsonResponse(status: number) {
   return new Response(null, { status });
@@ -125,6 +126,15 @@ Deno.serve(async (request) => {
   if (applied !== true) {
     console.error("A signed PayU notification did not match a stored order.");
     return jsonResponse(400);
+  }
+  if (order.status === "COMPLETED") {
+    EdgeRuntime.waitUntil(
+      notifyStaffOfNewOrder(supabaseUrl, serviceRoleKey, order.extOrderId).catch(
+        (error: unknown) => {
+          console.error("Could not notify staff about a paid order.", error);
+        },
+      ),
+    );
   }
   return jsonResponse(200);
 });

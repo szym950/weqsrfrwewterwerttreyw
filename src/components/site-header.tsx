@@ -1,12 +1,17 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/lib/cart-state";
 import { MenuCart } from "@/components/menu-cart";
 
 export function SiteHeader() {
+  const isMenuManager = useRouterState({
+    select: (state) => state.location.pathname === "/zarzadzanie-menu",
+  });
   const { items, change, open: cartOpen, setOpen: setCartOpen } = useCart();
   const cartCount = items.reduce((total, item) => total + item.quantity, 0);
+
+  if (isMenuManager) return null;
 
   return (
     <>

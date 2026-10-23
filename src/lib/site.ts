@@ -50,7 +50,7 @@ export const site = {
     pickup: "Odbiór na miejscu: Parkowa 10, 36-060 Głogów Małopolski. Szczegóły do uzupełnienia.",
     time: "Do uzupełnienia — orientacyjny czas realizacji zamówienia.",
     payments:
-      "Dostawa: gotówka przy odbiorze do wartości produktów 150 zł; powyżej 150 zł wymagana jest przedpłata (PayU w przygotowaniu). Przy odbiorze osobistym wybór sposobu płatności na miejscu.",
+      "Dostawa: gotówka przy odbiorze do wartości produktów 150 zł; powyżej 150 zł wymagana jest przedpłata PayU. Przy odbiorze osobistym wybór sposobu płatności na miejscu.",
   },
   about: [
     "Wake Up House to lokal przy Parkowej 10 w Głogowie Małopolski, gdzie zamawiasz burgery z wołowiny i chrupiącego fileta, pizzę na cieście z mozzarellą fior di latte, loaded fries i stripsy — wszystko przygotowywane na miejscu.",

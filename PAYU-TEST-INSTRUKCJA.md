@@ -90,7 +90,7 @@ Zaloguj się w oknie przeglądarki, które otworzy Supabase.
 Następnie połącz repozytorium z projektem Supabase tej strony:
 
 ```sh
-npx supabase link --project-ref rsfzhzzswrhtossxigsl
+npx supabase link --project-ref ykqvgfwmxzqqppinhnpl
 ```
 
 Jeżeli Supabase zapyta o hasło do bazy danych, wpisz hasło bazy z konfiguracji
@@ -171,7 +171,7 @@ Nie włączaj publicznej rejestracji pracowników.
 2. Wpisz do `android-app/.env`:
 
    ```dotenv
-   EXPO_PUBLIC_SUPABASE_URL=https://rsfzhzzswrhtossxigsl.supabase.co
+   EXPO_PUBLIC_SUPABASE_URL=https://ykqvgfwmxzqqppinhnpl.supabase.co
    EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=TU_WKLEJ_KLUCZ_SB_PUBLISHABLE
    ```
 
@@ -222,7 +222,7 @@ Supabase Secrets. Nie wgrywaj na hosting pliku `supabase/.env.payu`.
    dokładną podpowiedź adresu.
 4. Wpisz imię, telefon i e-mail. E-mail jest wymagany dla PayU.
 5. Wybierz **PayU online** i przejdź do podsumowania.
-6. Sprawdź kwotę. Kliknij **Zamawiam z obowiązkiem zapłaty — PayU**.
+6. Sprawdź kwotę. Kliknij **Przejdź do płatności PayU**.
 7. Powinna otworzyć się testowa strona PayU z kwotą w PLN. Dokończ testową
    płatność metodą podaną w [oficjalnej instrukcji testów PayU](https://developers.payu.com/europe/docs/testing/).
    Używaj wyłącznie testowej metody płatności PayU — nie wpisuj prawdziwej karty.

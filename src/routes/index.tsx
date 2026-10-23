@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ArrowUpRight, Search, X, Plus, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { categories, dishes, formatPrice, type Category, type Dish } from "@/lib/menu";
+import { loadLiveMenu, subscribeToMenuChanges } from "@/lib/live-menu";
 import { useCart } from "@/lib/cart-state";
 import { SiteFooter } from "@/components/site-footer";
 import { site } from "@/lib/site";
@@ -57,30 +58,73 @@ function Index() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [selected, setSelected] = useState<Dish | null>(null);
   const [payuReturn, setPayuReturn] = useState(false);
-  const { items: cart, change: updateCart, setOpen: setCartOpen } = useCart();
+  const { items: cart, change: updateCart, setOpen: setCartOpen, syncMenu } = useCart();
+  const [menuDishes, setMenuDishes] = useState(dishes);
+  const [menuCategories, setMenuCategories] = useState(categories.slice(1));
+  const [menuError, setMenuError] = useState("");
   const [topDishes, setTopDishes] = useState<Dish[]>([]);
-  const refreshTopDishes = (delayMs = 0) => {
-    window.setTimeout(async () => {
-      try {
-        const counts = await readOrderCounts();
-        setTopDishes(
-          dishes
-            .filter((dish) => (counts[dish.name] ?? 0) > 0)
-            .sort(
-              (a, b) =>
-                (counts[b.name] ?? 0) - (counts[a.name] ?? 0) ||
-                dishes.indexOf(a) - dishes.indexOf(b),
-            )
-            .slice(0, 3),
-        );
-      } catch (error) {
-        console.error("Nie udało się pobrać najczęściej wybieranych dań.", error);
-      }
-    }, delayMs);
-  };
+  const refreshTopDishes = useCallback(
+    (delayMs = 0) => {
+      window.setTimeout(async () => {
+        try {
+          const counts = await readOrderCounts();
+          setTopDishes(
+            menuDishes
+              .filter((dish) => (counts[dish.name] ?? 0) > 0)
+              .sort(
+                (a, b) =>
+                  (counts[b.name] ?? 0) - (counts[a.name] ?? 0) ||
+                  menuDishes.indexOf(a) - menuDishes.indexOf(b),
+              )
+              .slice(0, 3),
+          );
+        } catch (error) {
+          console.error("Nie udało się pobrać najczęściej wybieranych dań.", error);
+        }
+      }, delayMs);
+    },
+    [menuDishes],
+  );
   useEffect(() => {
     refreshTopDishes();
-  }, []);
+  }, [refreshTopDishes]);
+  useEffect(() => {
+    let active = true;
+    let refreshTimer: number | undefined;
+    const refreshMenu = async () => {
+      try {
+        const menu = await loadLiveMenu();
+        if (!active) return;
+        setMenuDishes(menu.dishes);
+        setMenuCategories(menu.categories);
+        setMenuError("");
+        setSelected((current) =>
+          current ? (menu.dishes.find((dish) => dish.name === current.name) ?? null) : null,
+        );
+        syncMenu(menu.dishes);
+      } catch (error) {
+        console.error("Nie udało się pobrać aktualnego menu.", error);
+        if (active) {
+          setMenuError("Nie udało się pobrać aktualnego menu. Pokazujemy ostatnią wersję.");
+        }
+      }
+    };
+    const channel = subscribeToMenuChanges(() => {
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => void refreshMenu(), 150);
+    });
+    void refreshMenu();
+    return () => {
+      active = false;
+      window.clearTimeout(refreshTimer);
+      void supabase.removeChannel(channel);
+    };
+  }, [syncMenu]);
+  useEffect(() => {
+    if (category !== "Wszystko" && !menuCategories.includes(category)) {
+      setCategory("Wszystko");
+    }
+  }, [category, menuCategories]);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("payment") !== "return") return;
@@ -95,7 +139,7 @@ function Index() {
     }
     updateCart(dish, delta);
   };
-  const visible = dishes.filter(
+  const visible = menuDishes.filter(
     (dish) =>
       (category === "Wszystko" || dish.category === category) &&
       `${dish.name} ${dish.ingredients.join(" ")}`
@@ -132,7 +176,7 @@ function Index() {
         <div className="category-bar" id="menu-list">
           <div className="menu-shell category-inner">
             <nav className="category-list" aria-label="Kategorie menu">
-              {categories.map((item) => (
+              {["Wszystko", ...menuCategories].map((item) => (
                 <Button
                   key={item}
                   variant={category === item ? "default" : "ghost"}
@@ -145,8 +189,8 @@ function Index() {
                   {item}
                   <span>
                     {item === "Wszystko"
-                      ? dishes.length
-                      : dishes.filter((d) => d.category === item).length}
+                      ? menuDishes.length
+                      : menuDishes.filter((d) => d.category === item).length}
                   </span>
                 </Button>
               ))}
@@ -178,6 +222,11 @@ function Index() {
           </div>
         </div>
         <section className="menu-shell menu-content" aria-label="Dania">
+          {menuError ? (
+            <p className="checkout-preview-warning" role="status">
+              {menuError}
+            </p>
+          ) : null}
           {category === "Wszystko" && !search && (
             <section className="top-picks" aria-label="Najczęściej wybierane">
               <div className="section-heading">
@@ -193,7 +242,7 @@ function Index() {
                   {topDishes.map((dish) => (
                     <article className="product-card" key={dish.name}>
                       <img
-                        src={dish.image}
+                        src={dish.image || "/apple-touch-icon.png"}
                         alt={dish.name}
                         className="product-image"
                         loading="lazy"
@@ -246,10 +295,10 @@ function Index() {
             {visible.map((dish) => (
               <article className="product-card" key={dish.name}>
                 <img
-                  src={dish.image}
+                  src={dish.image || "/apple-touch-icon.png"}
                   alt={dish.name}
                   className="product-image"
-                  loading={dishes.indexOf(dish) < 3 ? "eager" : "lazy"}
+                  loading={menuDishes.indexOf(dish) < 3 ? "eager" : "lazy"}
                   width="768"
                   height="768"
                 />
@@ -340,7 +389,11 @@ function Index() {
         <DialogContent className="dish-dialog">
           {selected && (
             <div className="dish-dialog-grid">
-              <img src={selected.image} alt={selected.name} className="product-image" />
+              <img
+                src={selected.image || "/apple-touch-icon.png"}
+                alt={selected.name}
+                className="product-image"
+              />
               <div className="dish-dialog-copy">
                 <p className="product-meta">{selected.category}</p>
                 <DialogTitle className="dish-dialog-title">{selected.name}</DialogTitle>

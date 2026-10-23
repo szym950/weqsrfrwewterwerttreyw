@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as DostawaRouteImport } from './routes/dostawa'
 import { Route as KontaktRouteImport } from './routes/kontakt'
 import { Route as ONasRouteImport } from './routes/o-nas'
+import { Route as ZarzadzanieMenuRouteImport } from './routes/zarzadzanie-menu'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -34,18 +35,25 @@ const ONasRoute = ONasRouteImport.update({
   path: '/o-nas',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ZarzadzanieMenuRoute = ZarzadzanieMenuRouteImport.update({
+  id: '/zarzadzanie-menu',
+  path: '/zarzadzanie-menu',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dostawa': typeof DostawaRoute
   '/kontakt': typeof KontaktRoute
   '/o-nas': typeof ONasRoute
+  '/zarzadzanie-menu': typeof ZarzadzanieMenuRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dostawa': typeof DostawaRoute
   '/kontakt': typeof KontaktRoute
   '/o-nas': typeof ONasRoute
+  '/zarzadzanie-menu': typeof ZarzadzanieMenuRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -53,13 +61,15 @@ export interface FileRoutesById {
   '/dostawa': typeof DostawaRoute
   '/kontakt': typeof KontaktRoute
   '/o-nas': typeof ONasRoute
+  '/zarzadzanie-menu': typeof ZarzadzanieMenuRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/dostawa' | '/kontakt' | '/o-nas'
+  fullPaths: '/' | '/dostawa' | '/kontakt' | '/o-nas' | '/zarzadzanie-menu'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/dostawa' | '/kontakt' | '/o-nas'
-  id: '__root__' | '/' | '/dostawa' | '/kontakt' | '/o-nas'
+  to: '/' | '/dostawa' | '/kontakt' | '/o-nas' | '/zarzadzanie-menu'
+  id:
+    '__root__' | '/' | '/dostawa' | '/kontakt' | '/o-nas' | '/zarzadzanie-menu'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -67,6 +77,7 @@ export interface RootRouteChildren {
   DostawaRoute: typeof DostawaRoute
   KontaktRoute: typeof KontaktRoute
   ONasRoute: typeof ONasRoute
+  ZarzadzanieMenuRoute: typeof ZarzadzanieMenuRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -99,6 +110,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ONasRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/zarzadzanie-menu': {
+      id: '/zarzadzanie-menu'
+      path: '/zarzadzanie-menu'
+      fullPath: '/zarzadzanie-menu'
+      preLoaderRoute: typeof ZarzadzanieMenuRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -107,6 +125,7 @@ const rootRouteChildren: RootRouteChildren = {
   DostawaRoute: DostawaRoute,
   KontaktRoute: KontaktRoute,
   ONasRoute: ONasRoute,
+  ZarzadzanieMenuRoute: ZarzadzanieMenuRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

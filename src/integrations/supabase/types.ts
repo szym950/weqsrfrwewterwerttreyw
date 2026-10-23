@@ -8,6 +8,83 @@ export type Database = {
   };
   public: {
     Tables: {
+      menu_categories: {
+        Row: {
+          created_at: string;
+          id: string;
+          is_active: boolean;
+          name: string;
+          sort_order: number;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          is_active?: boolean;
+          name: string;
+          sort_order?: number;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          is_active?: boolean;
+          name?: string;
+          sort_order?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      menu_dishes: {
+        Row: {
+          category_id: string;
+          created_at: string;
+          id: string;
+          image_url: string;
+          ingredients: string[];
+          is_available: boolean;
+          name: string;
+          price_pln: number | null;
+          sort_order: number;
+          station: string;
+          updated_at: string;
+        };
+        Insert: {
+          category_id: string;
+          created_at?: string;
+          id?: string;
+          image_url?: string;
+          ingredients?: string[];
+          is_available?: boolean;
+          name: string;
+          price_pln?: number | null;
+          sort_order?: number;
+          station?: string;
+          updated_at?: string;
+        };
+        Update: {
+          category_id?: string;
+          created_at?: string;
+          id?: string;
+          image_url?: string;
+          ingredients?: string[];
+          is_available?: boolean;
+          name?: string;
+          price_pln?: number | null;
+          sort_order?: number;
+          station?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "menu_dishes_category_id_fkey";
+            columns: ["category_id"];
+            isOneToOne: false;
+            referencedRelation: "menu_categories";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       dish_counts: {
         Row: {
           count: number;
@@ -42,6 +119,8 @@ export type Database = {
           payment_status: string;
           payu_order_id: string | null;
           payu_redirect_url: string | null;
+          push_notification_claimed_at: string | null;
+          push_notification_sent_at: string | null;
           status: string;
           subtotal: number;
           total: number;
@@ -62,6 +141,8 @@ export type Database = {
           payment_status?: string;
           payu_order_id?: string | null;
           payu_redirect_url?: string | null;
+          push_notification_claimed_at?: string | null;
+          push_notification_sent_at?: string | null;
           status?: string;
           subtotal: number;
           total: number;
@@ -82,12 +163,58 @@ export type Database = {
           payment_status?: string;
           payu_order_id?: string | null;
           payu_redirect_url?: string | null;
+          push_notification_claimed_at?: string | null;
+          push_notification_sent_at?: string | null;
           status?: string;
           subtotal?: number;
           total?: number;
           updated_at?: string;
         };
         Relationships: [];
+      };
+      staff_members: {
+        Row: {
+          created_at: string;
+          role: "administrator" | "menu_editor" | "orders";
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          role?: "administrator" | "menu_editor" | "orders";
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          role?: "administrator" | "menu_editor" | "orders";
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      staff_push_tokens: {
+        Row: {
+          expo_push_token: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          expo_push_token: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          expo_push_token?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "staff_push_tokens_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "staff_members";
+            referencedColumns: ["user_id"];
+          },
+        ];
       };
       order_items: {
         Row: {
@@ -161,6 +288,18 @@ export type Database = {
           p_total_grosz: number;
           p_payu_status: string;
         };
+        Returns: boolean;
+      };
+      claim_order_push_notification: {
+        Args: { p_order_id: string };
+        Returns: { order_number: number }[];
+      };
+      complete_order_push_notification: {
+        Args: { p_order_id: string };
+        Returns: boolean;
+      };
+      release_order_push_notification: {
+        Args: { p_order_id: string };
         Returns: boolean;
       };
     };

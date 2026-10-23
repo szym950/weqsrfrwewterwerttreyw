@@ -6,6 +6,7 @@ export type CartItem = { dish: Dish; quantity: number };
 type CartContextValue = {
   items: CartItem[];
   change: (dish: Dish, delta: number) => void;
+  syncMenu: (dishes: Dish[]) => void;
   open: boolean;
   setOpen: (open: boolean) => void;
 };
@@ -16,6 +17,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function isDish(value: unknown): value is Dish {
+  return (
+    isRecord(value) &&
+    typeof value["name"] === "string" &&
+    typeof value["category"] === "string" &&
+    typeof value["image"] === "string" &&
+    Array.isArray(value["ingredients"]) &&
+    value["ingredients"].every((ingredient) => typeof ingredient === "string") &&
+    (value["pricePLN"] === null || typeof value["pricePLN"] === "number") &&
+    (value["station"] === undefined || value["station"] === "kitchen" || value["station"] === "bar")
+  );
+}
+
 export function parseCart(serialized: string | null): CartItem[] {
   if (!serialized) return [];
   try {
@@ -24,10 +38,13 @@ export function parseCart(serialized: string | null): CartItem[] {
 
     return value.flatMap((entry): CartItem[] => {
       if (!isRecord(entry) || !isRecord(entry["dish"])) return [];
-      const name = entry["dish"]["name"];
+      const savedDish = entry["dish"];
+      const dish = isDish(savedDish)
+        ? savedDish
+        : typeof savedDish["name"] === "string"
+          ? dishes.find((item) => item.name === savedDish["name"])
+          : undefined;
       const quantity = entry["quantity"];
-      if (typeof name !== "string") return [];
-      const dish = dishes.find((item) => item.name === name);
       if (
         !dish ||
         dish.pricePLN === null ||

@@ -16,7 +16,7 @@ type OrderConfirmation = { orderNumber: number; total: number };
 
 const paymentLabels: Record<PaymentMethod, string> = {
   cash_delivery: "Gotówka przy dostawie",
-  payu: "PayU online — integracja w przygotowaniu",
+  payu: "PayU online",
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -38,6 +38,7 @@ export function MenuCart({
   const [fulfillment, setFulfillment] = useState<Fulfillment>("delivery");
   const [payment, setPayment] = useState<PaymentMethod>("cash_delivery");
   const [customerName, setCustomerName] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [selectedAddress, setSelectedAddress] = useState<DeliveryAddressSuggestion | null>(null);
@@ -172,7 +173,7 @@ export function MenuCart({
   };
 
   const submitOrder = async () => {
-    if (submittingOrder || (fulfillment === "delivery" && requiresPrepayment)) return;
+    if (submittingOrder) return;
     setSubmittingOrder(true);
     setOrderError("");
 
@@ -182,6 +183,7 @@ export function MenuCart({
         body: {
           idempotencyKey: idempotencyKey.current,
           customerName,
+          customerEmail: selectedPayment === "payu" ? customerEmail : undefined,
           customerPhone,
           fulfillment,
           paymentMethod: selectedPayment,
@@ -223,6 +225,33 @@ export function MenuCart({
         console.error("Serwer zwrócił nieprawidłowe potwierdzenie zamówienia.");
         setOrderError("Nie udało się potwierdzić zamówienia. Skontaktuj się z lokalem.");
         return;
+      }
+
+      if (selectedPayment === "payu") {
+        const redirectUrl = data["redirectUrl"];
+        if (typeof redirectUrl !== "string") {
+          console.error("Serwer nie zwrócił adresu płatności PayU.");
+          setOrderError("Nie udało się rozpocząć płatności PayU. Spróbuj ponownie.");
+          return;
+        }
+        try {
+          const url = new URL(redirectUrl);
+          const allowedHosts = new Set([
+            "secure.snd.payu.com",
+            "merch-prod.snd.payu.com",
+            "secure.payu.com",
+            "merch-prod.payu.com",
+          ]);
+          if (url.protocol !== "https:" || !allowedHosts.has(url.hostname)) {
+            throw new Error("Unexpected PayU redirect URL.");
+          }
+          window.location.assign(url.href);
+          return;
+        } catch (error) {
+          console.error("Serwer zwrócił nieprawidłowy adres przekierowania PayU.", error);
+          setOrderError("PayU zwróciło nieprawidłowy adres płatności.");
+          return;
+        }
       }
 
       setOrderConfirmation({ orderNumber: data["orderNumber"], total: data["total"] });
@@ -270,7 +299,7 @@ export function MenuCart({
               ? "Dane zamówienia"
               : stage === "complete"
                 ? "Zamówienie wysłane"
-              : "Twój koszyk"}
+                : "Twój koszyk"}
           <span className="text-primary">.</span>
         </DialogTitle>
         <DialogDescription>
@@ -278,9 +307,9 @@ export function MenuCart({
             ? "Sprawdź produkty, dostawę, płatność i sposób realizacji."
             : stage === "complete"
               ? "Szczegóły zamówienia zostały przekazane do lokalu."
-            : items.length
-              ? "Wybrane dania"
-              : "Twój koszyk jest pusty."}
+              : items.length
+                ? "Wybrane dania"
+                : "Twój koszyk jest pusty."}
         </DialogDescription>
         {stage === "complete" && orderConfirmation ? (
           <div className="checkout-summary">
@@ -288,9 +317,7 @@ export function MenuCart({
               Zamówienie <strong>#{orderConfirmation.orderNumber}</strong> zostało wysłane do
               lokalu.
             </p>
-            <div className="checkout-total">
-              Łącznie: {formatPrice(orderConfirmation.total)}
-            </div>
+            <div className="checkout-total">Łącznie: {formatPrice(orderConfirmation.total)}</div>
             <p className="cart-checkout-note">
               {fulfillment === "pickup"
                 ? "Płatność przy odbiorze na miejscu."
@@ -416,6 +443,21 @@ export function MenuCart({
                 onChange={(event) => setCustomerPhone(event.target.value)}
               />
             </label>
+            {fulfillment === "delivery" && selectedPayment === "payu" && (
+              <label className="checkout-field">
+                Adres e-mail do płatności PayU
+                <input
+                  required
+                  type="email"
+                  autoComplete="email"
+                  value={customerEmail}
+                  onChange={(event) => setCustomerEmail(event.target.value)}
+                />
+                <small>
+                  Adres e-mail zostanie przekazany operatorowi PayU w celu obsługi płatności.
+                </small>
+              </label>
+            )}
             {fulfillment === "delivery" && (
               <>
                 <p className="cart-checkout-note">
@@ -528,9 +570,8 @@ export function MenuCart({
                       Wartość produktów przekracza {formatPrice(deliveryPrepaymentThresholdPLN)}.
                     </strong>
                     <p>
-                      Przy dostawie wymagana jest przedpłata. Gotówka przy dostawie jest
-                      niedostępna. PayU nie jest jeszcze uruchomione, więc tego zamówienia nie można
-                      obecnie opłacić ani złożyć online.
+                      Przy dostawie wymagana jest przedpłata PayU. Gotówka przy dostawie jest
+                      niedostępna.
                     </p>
                   </div>
                 )}
@@ -543,15 +584,11 @@ export function MenuCart({
                         name="payment"
                         value={method}
                         checked={requiresPrepayment ? method === "payu" : payment === method}
-                        disabled={
-                          method === "payu" || (method === "cash_delivery" && requiresPrepayment)
-                        }
+                        disabled={method === "cash_delivery" && requiresPrepayment}
                         onChange={() => setPayment(method)}
                       />
                       <span>{paymentLabels[method]}</span>
-                      {method === "payu" && (
-                        <small>Testy niedostępne — brak konta i integracji</small>
-                      )}
+                      {method === "payu" && <small>Płatność online przez PayU.</small>}
                       {method === "cash_delivery" && requiresPrepayment && (
                         <small>
                           Niedostępna przy wartości produktów powyżej{" "}
@@ -588,10 +625,6 @@ export function MenuCart({
                 {deliveryError}
               </p>
             )}
-            <p className="checkout-preview-warning">
-              To przygotowanie i podgląd zamówienia. Nie ma jeszcze aktywnego PayU ani systemu
-              przyjmującego zamówienia — nic nie zostanie wysłane ani pobrane.
-            </p>
             <div className="cart-actions">
               <Button type="button" variant="outline" onClick={() => setStage("cart")}>
                 Wróć do koszyka
@@ -661,11 +694,9 @@ export function MenuCart({
               </div>
             </dl>
             {requiresPrepayment && (
-              <p className="payu-readiness" role="alert">
-                Wymagana przedpłata: wartość produktów przy dostawie przekracza{" "}
-                {formatPrice(deliveryPrepaymentThresholdPLN)}. Płatność gotówką jest zablokowana.
-                PayU nie działa jeszcze, więc to podsumowanie nie może zostać wysłane jako
-                zamówienie.
+              <p className="payu-readiness" role="status">
+                Wartość produktów przy dostawie przekracza{" "}
+                {formatPrice(deliveryPrepaymentThresholdPLN)}. Wymagana jest płatność PayU.
               </p>
             )}
             <section className="checkout-legal" aria-labelledby="checkout-review-legal-title">
@@ -683,11 +714,12 @@ export function MenuCart({
                 ))}
               </nav>
             </section>
-            <p className="checkout-preview-warning">
-              Po złożeniu zamówienia lokal otrzyma je w panelu.{" "}
-              {fulfillment === "pickup"
-                ? "Zapłacisz przy odbiorze na miejscu."
-                : "Zapłacisz gotówką przy dostawie."}
+            <p className="cart-checkout-note">
+              {selectedPayment === "payu"
+                ? "Po złożeniu zamówienia przejdziesz na bezpieczną stronę płatności PayU. Lokal otrzyma zamówienie po potwierdzeniu płatności."
+                : fulfillment === "pickup"
+                  ? "Po złożeniu zamówienia zapłacisz przy odbiorze na miejscu."
+                  : "Po złożeniu zamówienia lokal otrzyma je w panelu. Zapłacisz gotówką przy dostawie."}
             </p>
             {orderError && (
               <p className="checkout-route-error" role="alert">
@@ -701,11 +733,12 @@ export function MenuCart({
               <Button onClick={() => handleDialogOpenChange(false)} disabled={submittingOrder}>
                 Wróć do menu
               </Button>
-              <Button
-                onClick={submitOrder}
-                disabled={submittingOrder || (fulfillment === "delivery" && requiresPrepayment)}
-              >
-                {submittingOrder ? "Wysyłam zamówienie…" : "Zamawiam z obowiązkiem zapłaty"}
+              <Button onClick={submitOrder} disabled={submittingOrder}>
+                {submittingOrder
+                  ? "Przygotowuję zamówienie…"
+                  : selectedPayment === "payu"
+                    ? "Przejdź do płatności PayU"
+                    : "Zamawiam z obowiązkiem zapłaty"}
               </Button>
             </div>
           </div>

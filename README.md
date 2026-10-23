@@ -1,7 +1,8 @@
 # Wake Up House
 
-Statyczna strona menu Wake Up House. Po zbudowaniu działa na zwykłym hostingu
-plików przez FTP — serwer nie musi obsługiwać Node.js ani TanStack Start.
+Strona menu Wake Up House działa na zwykłym hostingu plików przez FTP.
+Kategorie, produkty, zdjęcia i ceny są przechowywane w Supabase i po wdrożeniu
+panelu nie wymagają ręcznej publikacji strony przy każdej zmianie.
 
 ## Uruchomienie lokalne
 
@@ -29,32 +30,37 @@ npm run build
    lub `.output/`. Nie usuwaj serwerowych katalogów, takich jak `cgi-bin`.
 
 Menu działa jako aplikacja statyczna, a podstrony używają adresów z `#`, więc
-hosting nie wymaga dodatkowych reguł przekierowań. Zdjęcia dań znajdują się w
-`public/`, a dane menu w `src/lib/menu.ts`. Koszyk zapisuje produkty w
-przeglądarce i zachowuje je podczas przechodzenia między podstronami.
+hosting nie wymaga dodatkowych reguł przekierowań. `src/lib/menu.ts` zawiera
+menu początkowe i awaryjne; po wdrożeniu migracji witryna pobiera aktualne dane
+z Supabase Realtime. Koszyk zapisuje produkty w przeglądarce i odświeża ich
+dane po zmianie menu.
 
 Strona przekazuje zamówienia do Supabase Edge Function `create-order`. Serwer
-ponownie sprawdza katalog i ceny, inicjuje płatność PayU, a aplikacja Android
-odbiera zamówienia przez Supabase Realtime. Płatności PayU działają tylko po
-wdrożeniu backendu i ustawieniu sekretów. Zamówienia PayU trafiają do lokalu
-dopiero po poprawnej weryfikacji powiadomienia z PayU. Dostawa powyżej 150 zł
-wymaga PayU; do tego progu klient może zapłacić gotówką lub PayU. Przy odbiorze
-osobistym płatność jest na miejscu.
+pobiera aktualne produkty i ceny z bazy przy składaniu zamówienia, inicjuje
+płatność PayU, a aplikacja Android odbiera zamówienia przez Supabase Realtime.
+Płatności PayU działają tylko po wdrożeniu backendu i ustawieniu sekretów.
+Zamówienia PayU trafiają do lokalu dopiero po poprawnej weryfikacji
+powiadomienia z PayU. Dostawa powyżej 150 zł wymaga PayU; do tego progu klient
+może zapłacić gotówką lub PayU. Przy odbiorze osobistym płatność jest na miejscu.
 
 ## Uruchomienie przyjmowania zamówień
 
 1. Zaloguj się do Supabase CLI i połącz projekt (`supabase login`,
    `supabase link`).
-2. Wypchnij migrację bazy i Edge Function:
+2. Wypchnij migracje bazy i zaktualizuj funkcje:
 
    ```sh
-   supabase db push
-   supabase functions deploy create-order
+   npx supabase db push --linked
+   npx supabase functions deploy create-order
+   npx supabase functions deploy payu-notify
    ```
 
-   Funkcja korzysta z `SUPABASE_URL` i `SUPABASE_SERVICE_ROLE_KEY` dostępnych
-   w środowisku Supabase. Nie umieszczaj klucza service role ani sekretów PayU
-   w kodzie strony lub aplikacji.
+   Migracja `20261023190000_live_menu.sql` przenosi początkowe pozycje do
+   `menu_categories` i `menu_dishes` oraz konfiguruje publiczny bucket zdjęć.
+   Migracja `20261024000000_staff_roles.sql` dodaje role i ograniczenia RLS.
+   Funkcje korzystają z `SUPABASE_URL` i
+   `SUPABASE_SERVICE_ROLE_KEY` dostępnych w środowisku Supabase. Nie umieszczaj
+   klucza service role ani sekretów PayU w kodzie strony lub aplikacji.
 
 3. Utwórz osobne konta pracowników w Supabase Authentication; nie włączaj
    publicznej rejestracji.
@@ -69,13 +75,34 @@ osobistym płatność jest na miejscu.
    funkcje PayU, dodaj sekrety w Supabase i dopiero potem publikuj nowy build
    strony.
 
-Szczegółowa instrukcja panelu: [android-app/README.md](./android-app/README.md).
+## Panel menu w Windows 11
+
+Po jednorazowym wdrożeniu najnowszej zawartości `dist/` przez FTP otwórz stronę
+po bezpiecznym HTTPS w Google Chrome i przejdź do `/#/zarzadzanie-menu`.
+Zaloguj się kontem, które ma wpis w `public.staff_members`. W Chrome wybierz „Zainstaluj Wake Up House”
+z menu przeglądarki, aby dodać panel jako aplikację w Windows 11. Nie jest to
+osobny instalator `.exe`; aktualizuje się razem ze stroną. Zmiany produktów,
+kategorii, cen i zdjęć zapisują się od razu w Supabase i są widoczne na stronie
+oraz w zamówieniach bez kolejnego wgrywania plików przez FTP.
+
+Po zastosowaniu migracji `20261024000000_staff_roles.sql` konta pracowników
+mają jedną z trzech ról: `administrator` (zamówienia i edycja menu),
+`menu_editor` (tylko edycja menu) albo `orders` (tylko zamówienia). Nowe
+rekordy w `staff_members` domyślnie otrzymują rolę `orders`; istniejące konta
+zachowują dotychczasowy dostęp jako `administrator`. Role można przypisywać w
+Supabase SQL Editorze, zmieniając kolumnę `role`. Uprawnienia sprawdza zarówno
+interfejs, jak i RLS w bazie. Szczegóły i gotowe zapytania są w
+[instrukcji dostępu pracowników](./android-app/README.md#dostęp-pracowników).
+Po wdrożeniu migracji wgraj nową stronę przez FTP i zbuduj/instaluj aktualny
+APK Androida, żeby w aplikacji pojawiła się obsługa ról. Sama baza blokuje
+niedozwolony dostęp również w starszych wersjach aplikacji.
+
+Szczegółowa instrukcja panelu zamówień: [android-app/README.md](./android-app/README.md).
 Szczegółowa instrukcja testów PayU:
 [PAYU-TEST-INSTRUKCJA.md](./PAYU-TEST-INSTRUKCJA.md).
 Wycinek kopii projektu sprzed wdrożenia jest w
 `backup/project-before-orders.tar.gz`; archiwum celowo pomija pliki `.env`,
 zależności i buildy.
 
-Przy zmianie cen menu zaktualizuj również katalog serwerowy w
-`supabase/functions/_shared/menu.ts`; ceny z przeglądarki nie są traktowane
-jako wiarygodne. Test katalogu sprawdza zgodność obu list.
+Panel menu: `/#/zarzadzanie-menu`. Ceny z przeglądarki nie są traktowane jako
+wiarygodne — funkcja zamówień odczytuje je z bazy i sama wylicza kwoty.

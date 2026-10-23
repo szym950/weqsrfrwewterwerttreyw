@@ -3,10 +3,11 @@
     "name": "Wake Up House Zamówienia",
     "slug": "wakeuphouse-orders",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
+      "bundleIdentifier": "pl.wakeuphouse.orders",
       "supportsTablet": true
     },
     "android": {
@@ -27,6 +28,17 @@
         "projectId": "b3c4956e-6b67-422f-b412-6e308fc461e9"
       }
     },
-    "owner": "kakaroko"
+    "owner": "kakaroko",
+    "plugins": [
+      "expo-status-bar",
+      "expo-sharing",
+      "expo-notifications",
+      [
+        "expo-navigation-bar",
+        {
+          "hidden": true
+        }
+      ]
+    ]
   }
 }

@@ -1,5 +1,5 @@
 import { corsHeaders } from "../_shared/cors.ts";
-import { orderableMenu } from "../_shared/menu.ts";
+import { notifyStaffOfNewOrder } from "../_shared/order-push.ts";
 
 type OrderRequest = {
   idempotencyKey: string;
@@ -80,7 +80,7 @@ async function getPayuAccessToken(config: ReturnType<typeof payuConfiguration>) 
   });
   if (!response.ok) {
     console.error("PayU OAuth request failed.", response.status);
-    throw new Error("Nie udało się połączyć z PayU. Sprawdź dane sandbox w Supabase.");
+    throw new Error("Nie udało się połączyć z PayU. Sprawdź dane i wybrane środowisko w Supabase.");
   }
   const result: unknown = await response.json();
   if (!isRecord(result) || typeof result.access_token !== "string") {
@@ -93,6 +93,52 @@ async function getPayuAccessToken(config: ReturnType<typeof payuConfiguration>) 
 function splitCustomerName(value: string) {
   const [firstName, ...rest] = value.trim().split(/\s+/);
   return { firstName, lastName: rest.join(" ") || firstName };
+}
+
+async function loadOrderableMenu(supabaseUrl: string, serviceRoleKey: string) {
+  const url = new URL(`${supabaseUrl.replace(/\/+$/, "")}/rest/v1/menu_dishes`);
+  url.searchParams.set("select", "name,price_pln,station,menu_categories!inner(name,is_active)");
+  url.searchParams.set("is_available", "eq.true");
+  url.searchParams.set("menu_categories.is_active", "eq.true");
+  const response = await fetch(url, {
+    headers: {
+      apikey: serviceRoleKey,
+      ...(serviceRoleKey.startsWith("sb_secret_")
+        ? {}
+        : { Authorization: `Bearer ${serviceRoleKey}` }),
+    },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) {
+    console.error("Supabase menu lookup failed.", response.status, await response.text());
+    throw new Error("Nie udało się sprawdzić aktualnego menu.");
+  }
+  const result: unknown = await response.json();
+  if (!Array.isArray(result)) throw new Error("Supabase returned invalid menu data.");
+
+  const menu = new Map<
+    string,
+    { category: string; priceGrosz: number | null; station: "kitchen" | "bar" }
+  >();
+  for (const value of result) {
+    if (
+      !isRecord(value) ||
+      typeof value.name !== "string" ||
+      typeof value.station !== "string" ||
+      !isRecord(value.menu_categories) ||
+      typeof value.menu_categories.name !== "string" ||
+      (value.price_pln !== null && typeof value.price_pln !== "number") ||
+      (value.station !== "kitchen" && value.station !== "bar")
+    ) {
+      throw new Error("Supabase returned malformed menu data.");
+    }
+    menu.set(value.name, {
+      category: value.menu_categories.name,
+      priceGrosz: value.price_pln === null ? null : Math.round(Number(value.price_pln) * 100),
+      station: value.station,
+    });
+  }
+  return menu;
 }
 
 async function savePayuRedirect(
@@ -176,6 +222,21 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: "Check the customer and order details." }, 400);
   }
 
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceRoleKey) {
+    console.error("Missing Supabase service configuration for create-order.");
+    return jsonResponse({ error: "Przyjmowanie zamówień jest chwilowo niedostępne." }, 503);
+  }
+
+  let orderableMenu: Awaited<ReturnType<typeof loadOrderableMenu>>;
+  try {
+    orderableMenu = await loadOrderableMenu(supabaseUrl, serviceRoleKey);
+  } catch (error) {
+    console.error("Could not load the current menu for order validation.", error);
+    return jsonResponse({ error: "Nie udało się sprawdzić aktualnego menu." }, 503);
+  }
+
   const validatedItems = [];
   const seen = new Set<string>();
   let subtotalGrosz = 0;
@@ -191,8 +252,10 @@ Deno.serve(async (request) => {
     ) {
       return jsonResponse({ error: "One or more order items are invalid." }, 400);
     }
-    const dish = orderableMenu[item.dishName];
-    if (!dish) return jsonResponse({ error: "An item is no longer available." }, 400);
+    const dish = orderableMenu.get(item.dishName);
+    if (!dish || dish.priceGrosz === null) {
+      return jsonResponse({ error: "An item is no longer available." }, 400);
+    }
     seen.add(item.dishName);
     const lineTotalGrosz = dish.priceGrosz * item.quantity;
     subtotalGrosz += lineTotalGrosz;
@@ -274,13 +337,6 @@ Deno.serve(async (request) => {
     deliveryAddress = body.deliveryAddress.trim();
   }
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !serviceRoleKey) {
-    console.error("Missing Supabase service configuration for create-order.");
-    return jsonResponse({ error: "Przyjmowanie zamówień jest chwilowo niedostępne." }, 503);
-  }
-
   const subtotal = subtotalGrosz / 100;
   const deliveryCost = deliveryCostGrosz / 100;
   let response: Response;
@@ -338,6 +394,14 @@ Deno.serve(async (request) => {
   ) {
     console.error("Supabase returned an invalid create-order response.");
     return jsonResponse({ error: "Nie udało się potwierdzić zamówienia." }, 503);
+  }
+
+  if (order.payment_status === "not_required" || order.payment_status === "paid") {
+    EdgeRuntime.waitUntil(
+      notifyStaffOfNewOrder(supabaseUrl, serviceRoleKey, order.id).catch((error: unknown) => {
+        console.error("Could not notify staff about a new order.", error);
+      }),
+    );
   }
 
   if (paymentMethod === "payu" && order.payment_status !== "paid") {
@@ -418,7 +482,7 @@ Deno.serve(async (request) => {
       if ((!payuResponse.ok && payuResponse.status !== 302) || !redirectUrl || !payuOrderId) {
         console.error("PayU order creation failed.", payuResponse.status, responseData.status);
         return jsonResponse(
-          { error: "PayU nie utworzyło płatności. Sprawdź ustawienia sandbox i spróbuj ponownie." },
+          { error: "PayU nie utworzyło płatności. Sprawdź ustawienia PayU i spróbuj ponownie." },
           502,
         );
       }
